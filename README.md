@@ -38,7 +38,7 @@ Licensed under a [Creative Commons Attribution-NonCommercial 4.0 International](
 Except where otherwise noted, this content is published under a [CC BY-NC](https://creativecommons.org/licenses/by-nc/4.0/) license, which means that you can copy, remix, transform and build upon the content as long as you do not use the material for commercial purposes and give appropriate credit and provide a link to the license.
 
 ## Citation
-If you use this code for your research, please cite our papers [L-CAD: Language-based Colorization with Any-level Descriptions using Diffusion Priors](https://ci.idm.pku.edu.cn/Weng_CVPR23f.pdf)](https://ci.idm.pku.edu.cn/Weng_NeurIPS23.pdf)
+If you use this code for your research, please cite our papers [L-CAD: Language-based Colorization with Any-level Descriptions using Diffusion Priors](https://ci.idm.pku.edu.cn/Weng_NeurIPS23.pdf)
 ```
 @InProceedings{lcad,
   author = {Chang, Zheng and Weng, Shuchen and Zhang, Peixuan and Li, Yu and Li, Si and Shi, Boxin},
