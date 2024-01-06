@@ -25,7 +25,7 @@ class MyDataset(Dataset):
         self.use_sam = use_sam
         self.img_size = img_size
         if split == 'train':
-            caption_path = os.path.join(caption_dir,'selected_train.json')
+            caption_path = os.path.join(caption_dir,'caption_train.json')
             self.transform = transforms.Compose([
                 transforms.RandomResizedCrop((img_size,img_size),scale=(0.8, 1.0), interpolation=3),
                 transforms.RandomHorizontalFlip(),
@@ -35,7 +35,7 @@ class MyDataset(Dataset):
             self.keys = list(self.caption_file.keys())
 
         elif split == 'val':
-            caption_path = os.path.join(caption_dir, 'selected_val.json')      
+            caption_path = os.path.join(caption_dir, 'caption_val.json')      
  
             self.transform = transforms.Compose([transforms.Resize((img_size,img_size)),
                                                 transforms.ToTensor(),])
@@ -48,7 +48,7 @@ class MyDataset(Dataset):
             if self.use_sam: 
                 caption_path = os.path.join('sam_mask','pairs.json')
             else:    
-                caption_path = os.path.join('example','test-pair-0.json')
+                caption_path = os.path.join('example','test-pair.json')
 
                 
             self.transform = transforms.Compose([# CenterCropLongEdge(),
@@ -122,7 +122,6 @@ class MyDataset(Dataset):
             return dict(jpg=target, txt=prompt, hint=source, name=key, mask=mask)
 
 
-
 def rgb2xyz(rgb): 
 
     mask = (rgb > .04045).type(torch.FloatTensor)
@@ -162,14 +161,12 @@ def xyz2lab(xyz):
 
     return out
 
-
 def rgb2lab(rgb):
     lab = xyz2lab(rgb2xyz(rgb)) 
     l_rs = (lab[[0],:,:])/127.5 - 1 
     ab_rs = lab[1:,:,:]/110. 
     out = torch.cat((l_rs,ab_rs),dim=0)
     return out
-
 
 def lab2rgb(lab_rs):
     l = lab_rs[:,[0],:,:]/2.*100. + 50.

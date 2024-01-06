@@ -166,86 +166,8 @@ class CrossAttention(nn.Module):
         self.struct_attn = struct_attn
         self.sim = None
 
-    def reshape_heads_to_batch_dim(self, tensor):
-        batch_size, seq_len, dim = tensor.shape
-        head_size = self.heads
-        tensor = tensor.reshape(batch_size, seq_len, head_size, dim // head_size)
-        tensor = tensor.permute(0, 2, 1, 3).reshape(batch_size * head_size, seq_len, dim // head_size)
-        return tensor
-
-    def reshape_batch_dim_to_heads(self, tensor):
-        batch_size, seq_len, dim = tensor.shape
-        head_size = self.heads
-        tensor = tensor.reshape(batch_size // head_size, head_size, seq_len, dim)
-        tensor = tensor.permute(0, 2, 1, 3).reshape(batch_size // head_size, seq_len, dim * head_size)
-        return tensor
 
     def forward(self, x, context=None, mask=None):
-        h = self.heads
-
-        q = self.to_q(x)
-        context = default(context, x)
-        k = self.to_k(context)
-        v = self.to_v(context)
-
-        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h), (q, k, v))
-
-        sim = einsum('b i d, b j d -> b i j', q, k) * self.scale
-
-        if exists(mask):
-            mask = rearrange(mask, 'b ... -> b (...)')
-            max_neg_value = -torch.finfo(sim.dtype).max
-            mask = repeat(mask, 'b j -> (b h) () j', h=h)
-            sim.masked_fill_(~mask, max_neg_value)
-
-        # attention, what we cannot get enough of
-        attn = sim.softmax(dim=-1)
-
-        out = einsum('b i j, b j d -> b i d', attn, v)
-        out = rearrange(out, '(b h) n d -> b n (h d)', h=h)
-        return self.to_out(out)
-    
-    def forward_p2p(self, x, context=None, mask=None):
-        batch_size, sequence_length, dim = x.shape
-
-        q = self.to_q(x)
-        context = context if context is not None else x
-        k = self.to_k(context)
-        v = self.to_v(context)
-
-        q = self.reshape_heads_to_batch_dim(q)
-        k = self.reshape_heads_to_batch_dim(k)
-        v = self.reshape_heads_to_batch_dim(v)
-
-        # TODO(PVP) - mask is currently never used. Remember to re-implement when used
-
-        # attention, what we cannot get enough of
-        hidden_states = self._attention(q, k, v, sequence_length, dim)
-
-        return self.to_out(hidden_states)
-
-    def _attention(self, query, key, value, sequence_length, dim):
-        batch_size_attention = query.shape[0]
-        hidden_states = torch.zeros(
-            (batch_size_attention, sequence_length, dim // self.heads), device=query.device, dtype=query.dtype
-        )
-        slice_size = self._slice_size if self._slice_size is not None else hidden_states.shape[0]
-        for i in range(hidden_states.shape[0] // slice_size):
-            start_idx = i * slice_size
-            end_idx = (i + 1) * slice_size
-            attn_slice = (
-                torch.einsum("b i d, b j d -> b i j", query[start_idx:end_idx], key[start_idx:end_idx]) * self.scale
-            )
-            attn_slice = attn_slice.softmax(dim=-1)
-            attn_slice = torch.einsum("b i j, b j d -> b i d", attn_slice, value[start_idx:end_idx])
-
-            hidden_states[start_idx:end_idx] = attn_slice
-
-        # reshape hidden_states
-        hidden_states = self.reshape_batch_dim_to_heads(hidden_states)
-        return hidden_states
-
-    def forward_struct_sam(self, x, context=None, mask=None):
         q = self.to_q(x)
         # print('cross_attentoin', type(context))
         # print(context[0])
@@ -329,15 +251,11 @@ class CrossAttention(nn.Module):
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h), (q, k, v))
 
         if self.sim is None:
-            print('calculate sim')
-            
-
+            # print('calculate sim')
             sim = einsum('b i d, b j d -> b i j', q, k) * self.scale
             self.sim = sim
-            # print("before sim", self.sim)
         else:
-            print('use save sim')
-            # print("after sim", self.sim)
+            # print('use save sim')
             sim = self.sim
             self.sim_save = sim.clone().detach()
             self.sim = None
@@ -351,7 +269,7 @@ class CrossAttention(nn.Module):
         attn = sim.softmax(dim=-1)
         # print('attn.requires_grad', attn.requires_grad)
 
-        self.attn_probs = attn
+        # self.attn_probs = attn
         # print('self.attn_probs.requires_grad', self.attn_probs.requires_grad)
         
         # if self.save_map and sim.size(1) != sim.size(2):

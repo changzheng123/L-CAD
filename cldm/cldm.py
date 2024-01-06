@@ -29,16 +29,16 @@ from PIL import Image
 from ldm.ptp import ptp_SD
 
 
-def save_images(samples, batch, save_root, prefix='', name_prompt=False):
+def save_images(samples, batch, save_root, name_prompt=False):
     for i in range(samples.shape[0]):
             img_name = batch['name'][i]
             grid = samples[i].transpose(0, 1).transpose(1, 2).squeeze(-1)
             grid = grid.cpu().numpy()
             grid = (grid * 255).astype(np.uint8)
             if name_prompt:
-                filename = prefix + '_' + img_name.split('.')[0]+'_'+batch['txt'][i][0:150]+'.png'
+                filename =img_name.split('.')[0]+'_'+batch['txt'][i][0:150]+'.png'
             else:
-                filename = prefix + '_' + img_name.replace("jpg","png")
+                filename =img_name.replace("jpg","png")
             path = os.path.join(save_root, filename)
             os.makedirs(os.path.split(path)[0], exist_ok=True)
             Image.fromarray(grid).save(path)
@@ -52,7 +52,6 @@ class ControlLDM_cat(LatentDiffusion):
         self.control_key = control_key
         self.only_mid_control = only_mid_control
         
-
     @torch.no_grad()
     def get_input(self, batch, k, bs=None, *args, **kwargs):
         z, c, x = super().get_input(batch, self.first_stage_key, return_x=True, *args, **kwargs)
@@ -186,7 +185,43 @@ class ControlLDM_cat(LatentDiffusion):
         if self.usesam:    
             self.test_step_sam(batch, batch_idx)
         else:
-            self.test_step_orig(batch, batch_idx)
+            self.test_step_org(batch, batch_idx)
+
+    @torch.no_grad()
+    def test_step_org(self, batch, batch_idx):
+
+        multiColor_test = True
+        ddim_steps=50 
+        ddim_eta=0.0
+        unconditional_guidance_scale=4.5  
+        save_root = './image_log/test_%s_ug_%.1f'%(start_time,unconditional_guidance_scale)
+
+        use_ddim = ddim_steps is not None
+        z, c, x = self.get_input(batch,None)
+        c_cat, c = c["c_concat"][0], c["c_crossattn"][0] # 
+        N = z.shape[0]
+        gray_z = self.first_stage_model.g_encoder(c_cat) 
+        # print('gray_z.shape',gray_z[0].shape)
+        
+        uc_cross = self.get_unconditional_conditioning(N)
+        uc_cat = c_cat  # torch.zeros_like(c_cat)
+        uc_full = {"c_concat": [uc_cat], "c_crossattn": [uc_cross]}
+        samples_cfg, _ = self.sample_log(cond={"c_concat": [c_cat], "c_crossattn": [c]},
+                                            batch_size=N, ddim=use_ddim,
+                                            ddim_steps=ddim_steps, eta=ddim_eta,
+                                            unconditional_guidance_scale=unconditional_guidance_scale,
+                                            unconditional_conditioning=uc_full,
+                                            )
+        
+ 
+        x_samples = self.decode_first_stage(samples_cfg, gray_z)
+        x_samples = torch.clamp(x_samples, -1., 1.)
+        x_samples = (x_samples + 1.0) / 2.0  # -1,1 -> 0,1; c,h,w
+
+        if multiColor_test:
+            save_images(x_samples, save_root = save_root, batch = batch, name_prompt=True)
+        else:
+            save_images(x_samples, save_root = save_root, batch = batch)
 
     # @torch.no_grad()
     def test_step_sam(self, batch, batch_idx):
@@ -222,7 +257,7 @@ class ControlLDM_cat(LatentDiffusion):
         shape = (self.channels, h // 8, w // 8)
         samples_cfg, intermediates = ddim_sampler.sample(ddim_steps, b, shape, cond, eta=ddim_eta,
                                             unconditional_guidance_scale=unconditional_guidance_scale, unconditional_conditioning=uc_full,verbose=False,
-                                            use_attn_guidance=True, # 使用attn_guidance
+                                            use_attn_guidance=True, 
                                             sam_mask=sam_mask
                                             )
         
@@ -233,6 +268,6 @@ class ControlLDM_cat(LatentDiffusion):
         if multiColor_test:
             save_images(x_samples, save_root = save_root, batch = batch, name_prompt=True)
         else:
-            save_images(x_samples, save_root = save_root, batch = batch, prefix='eh')
+            save_images(x_samples, save_root = save_root, batch = batch,)
         
         

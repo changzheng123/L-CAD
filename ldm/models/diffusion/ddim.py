@@ -221,7 +221,7 @@ class DDIMSampler(object):
                         c_in[k] = [torch.cat([
                             unconditional_conditioning[k][i],
                             c[k][i]]) for i in range(len(c[k]))]
-                    elif isinstance(c[k], dict): # 适配struct的输入改这里 c{"c_cat": ,"c_crossattention"}
+                    elif isinstance(c[k], dict): 
                         c_in[k] = [unconditional_conditioning[k][0], c[k]] 
                     else:
                         c_in[k] = torch.cat([
@@ -258,102 +258,6 @@ class DDIMSampler(object):
 
         # current prediction for x_0
         if self.model.parameterization != "v":
-            pred_x0 = (x - sqrt_one_minus_at * e_t) / a_t.sqrt()
-        else:
-            pred_x0 = self.model.predict_start_from_z_and_v(x, t, model_output)
-
-        if quantize_denoised:
-            pred_x0, _, *_ = self.model.first_stage_model.quantize(pred_x0)
-
-        if dynamic_threshold is not None:
-            raise NotImplementedError()
-
-        # direction pointing to x_t
-        dir_xt = (1. - a_prev - sigma_t**2).sqrt() * e_t
-        noise = sigma_t * noise_like(x.shape, device, repeat_noise) * temperature
-        if noise_dropout > 0.:
-            noise = torch.nn.functional.dropout(noise, p=noise_dropout)
-        x_prev = a_prev.sqrt() * pred_x0 + dir_xt + noise
-        return x_prev, pred_x0
-
-    # @torch.no_grad()
-    def p_sample_ddim_with_attn_gdc(self, x, c, t, sam_mask, index, repeat_noise=False, use_original_steps=False, quantize_denoised=False,
-                      temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None,
-                      unconditional_guidance_scale=1., unconditional_conditioning=None,
-                      dynamic_threshold=None):
-        b, *_, device = *x.shape, x.device
-
-        if unconditional_conditioning is None or unconditional_guidance_scale == 1.:
-            model_output = self.model.apply_model(x, t, c)
-        else:
-            x_in = torch.cat([x] * 2)
-            t_in = torch.cat([t] * 2)
-            if isinstance(c, dict):
-                # print('p_sample_ddim',type(c))
-                assert isinstance(unconditional_conditioning, dict)
-                c_in = dict()
-                for k in c:
-                    # print(k)
-                    # print(type(c[k]))
-                    if isinstance(c[k], list):
-                        c_in[k] = [torch.cat([
-                            unconditional_conditioning[k][i],
-                            c[k][i]]) for i in range(len(c[k]))]
-                    elif isinstance(c[k], dict): # 适配struct的输入改这里 c{"c_cat": ,"c_crossattention"}
-                        c_in[k] = [unconditional_conditioning[k][0], c[k]] 
-                    else:
-                        c_in[k] = torch.cat([
-                                unconditional_conditioning[k],
-                                c[k]])
-            elif isinstance(c, list):
-                c_in = list()
-                assert isinstance(unconditional_conditioning, list)
-                for i in range(len(c)):
-                    c_in.append(torch.cat([unconditional_conditioning[i], c[i]]))
-            else:
-                c_in = torch.cat([unconditional_conditioning, c])
-            opt = torch.optim.SGD([x_in], lr=0.1)
-            noise_pred = self.model.apply_model(x_in, t_in, c_in) # 这里是为了计算梯度，算一遍
-            # 计算loss并回传给x_in
-            loss = 0.0
-            for name, module in self.model.model.diffusion_model.named_modules():
-                module_name = type(module).__name__
-                if module_name == "CrossAttention" and 'attn2' in name:
-                    curr = module.attn_probs # size is num_channel,s*s,77
-                    print('curr.size', curr.shape)
-                    # ref = sam_mask.detach().to(device) 
-                    ref =  torch.zeros_like(curr).to(device) 
-                    loss += ((curr-ref)**2).sum((1,2)).mean(0)
-                    print("loss",loss)
-            loss.backward(retain_graph=False)
-            opt.step()
-            with torch.no_grad():
-                model_uncond, model_t = self.model.apply_model(x_in.detach(), t_in, c_in).chunk(2)
-            model_output = model_uncond + unconditional_guidance_scale * (model_t - model_uncond)
-            x = x_in.detach().chunk(2)[0]
-
-        if self.model.parameterization == "v":
-            e_t = self.model.predict_eps_from_z_and_v(x, t, model_output)
-        else:
-            e_t = model_output
-
-        if score_corrector is not None:
-            assert self.model.parameterization == "eps", 'not implemented'
-            e_t = score_corrector.modify_score(self.model, e_t, x, t, c, **corrector_kwargs)
-
-        alphas = self.model.alphas_cumprod if use_original_steps else self.ddim_alphas
-        alphas_prev = self.model.alphas_cumprod_prev if use_original_steps else self.ddim_alphas_prev
-        sqrt_one_minus_alphas = self.model.sqrt_one_minus_alphas_cumprod if use_original_steps else self.ddim_sqrt_one_minus_alphas
-        sigmas = self.model.ddim_sigmas_for_original_num_steps if use_original_steps else self.ddim_sigmas
-        # select parameters corresponding to the currently considered timestep
-        a_t = torch.full((b, 1, 1, 1), alphas[index], device=device)
-        a_prev = torch.full((b, 1, 1, 1), alphas_prev[index], device=device)
-        sigma_t = torch.full((b, 1, 1, 1), sigmas[index], device=device)
-        sqrt_one_minus_at = torch.full((b, 1, 1, 1), sqrt_one_minus_alphas[index],device=device)
-
-        # current prediction for x_0
-        if self.model.parameterization != "v":
-            # pred_x0 = (x - sqrt_one_minus_at * e_t) / a_t.sqrt()
             pred_x0 = (x - sqrt_one_minus_at * e_t) / a_t.sqrt()
         else:
             pred_x0 = self.model.predict_start_from_z_and_v(x, t, model_output)
@@ -497,11 +401,7 @@ def prep_unet(unet):
             params.requires_grad = True
         else:
             params.requires_grad = False
-    # replace the fwd function
-    # for name, module in unet.named_modules():
-    #     module_name = type(module).__name__
-    #     if module_name == "CrossAttention":
-    #         module.set_processor(MyCrossAttnProcessor())
+
     return unet
 
 
@@ -572,7 +472,7 @@ class DDIMSampler_withsam(object):
                unconditional_conditioning=None, # this has to come in the same format as the conditioning, # e.g. as encoded tokens, ...
                dynamic_threshold=None,
                ucg_schedule=None,
-               use_attn_guidance = False, # 设置注意力指导
+               use_attn_guidance = False, # 
                sam_mask=None,
                split_id =None,
                tokens = None,
@@ -688,7 +588,7 @@ class DDIMSampler_withsam(object):
                 intermediates['x_inter'].append(img)
                 intermediates['pred_x0'].append(pred_x0)
             # 单步时间采样调试
-            sys.exit()
+            # sys.exit()
 
         return img, intermediates
     
@@ -770,215 +670,6 @@ class DDIMSampler_withsam(object):
         x_prev = a_prev.sqrt() * pred_x0 + dir_xt + noise
         return x_prev, pred_x0
 
-    def p_sample_ddim_with_attn_gdc_orig(self, x, c, t, sam_mask, split_id, index, repeat_noise=False, use_original_steps=False, quantize_denoised=False,
-                      temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None,
-                      unconditional_guidance_scale=1., unconditional_conditioning=None,
-                      dynamic_threshold=None, tokens=None, visual_attn = False):
-        b, *_, device = *x.shape, x.device
-
-    
-        if unconditional_conditioning is None or unconditional_guidance_scale == 1.:
-            print("unconditional_guidance_scale cannot be 1.0")
-            sys.exit()
-        else:
-            # 设置成可以计算梯度
-            unet = self.model.model.diffusion_model
-            unet = prep_unet(unet)
-
-            # with torch.enable_grad():
-            x_in = torch.cat([x] * 2)
-            t_in = torch.cat([t] * 2)
-            if isinstance(c, dict):
-                # print('p_sample_ddim',type(c))
-                assert isinstance(unconditional_conditioning, dict)
-                c_in = dict()
-                for k in c:
-                    # print(k)
-                    # print(type(c[k]))
-                    if isinstance(c[k], list):
-                        c_in[k] = [torch.cat([
-                            unconditional_conditioning[k][i],
-                            c[k][i]]) for i in range(len(c[k]))]
-                    elif isinstance(c[k], dict): # 适配struct的输入改这里 c{"c_cat": ,"c_crossattention"}
-                        c_in[k] = [unconditional_conditioning[k][0], c[k]] 
-                    else:
-                        c_in[k] = torch.cat([
-                                unconditional_conditioning[k],
-                                c[k]])
-            elif isinstance(c, list):
-                c_in = list()
-                assert isinstance(unconditional_conditioning, list)
-                for i in range(len(c)):
-                    c_in.append(torch.cat([unconditional_conditioning[i], c[i]]))
-            else:
-                c_in = torch.cat([unconditional_conditioning, c])
-            
-            x_in = x_in.detach().clone()
-            x_h = x_w = x_in.shape[-1]
-            x_in.requires_grad = True
-            # print('x_in',x_in)
-            
-            cond_hint = torch.cat(c_in['c_concat'], 1)
-            cond_txt = c_in['c_crossattn'][0]
-            with torch.no_grad(): # 以灰度图为控制条件
-                gray_z_last = self.model.first_stage_model.g_encoder(cond_hint)[-1]
-                cond_hint = gray_z_last
-            control = self.model.control_model(cond_hint)
-            # print(x_in.shape)
-            # print(t.shape)
-            # print(cond_txt.shape)
-            # print(control.shape)
-            # sys.exit()
-            noise_pred = unet(x=x_in, timesteps=t, context=cond_txt, control=control, only_mid_control=self.model.only_mid_control)
-            
-            # 计算loss并回传给x_in
-            opt = torch.optim.SGD([x_in], lr=0.1)
-            loss = torch.tensor(0)
-            # print('split_id',split_id)
-            for name, module in unet.named_modules():
-                module_name = type(module).__name__
-                if module_name == "CrossAttention" and 'attn2' in name:
-                    curr = module.attn_probs # bs(c+uc)* head, h*w, t_len
-                    bs, hxw, t_len = curr.shape
-                    h = w = int(hxw**0.5)
-                    # if h > 16: # 小于8x8的不加
-                    #     continue
-                    curr = curr.permute(0,2,1).reshape(bs, t_len, h, w) # bs(c+uc)* head, t_len, h, w
-                    # ref =  torch.zeros_like(module.attn_probs).detach().to(device)
-                    ref = 1 - torch.nn.functional.interpolate(sam_mask, (h,w))
-                    ref = ref.detach().to(device)
-                    # print('ref.shape',ref.shape) # bs , num_inst, h, w 
-                    for i, idx in enumerate(split_id): # i代表第i个instance
-                        if i == 0:
-                            start_idx = 1
-                        else:
-                            start_idx = split_id[i-1]+1
-                        # print(curr[8:, start_idx:idx, :, :].shape)
-                        # print('start_end_idx_%d:'%i,start_idx,idx)
-                        # print(tokens[start_idx-1:idx-1])
-                        loss_ =  curr[8:, start_idx:idx, :, :] * ref[:,i].unsqueeze(1) # bs维取8是排除unconditon_c，但都改貌似效果好一点
-                        # ######## 用于保存sam_mask和attn_mask ##############
-                        if visual_attn:
-                            mask_save = (ref[:,i].squeeze().cpu().numpy() * 255).astype(np.uint8)
-                            mask_name = 'image_log/test_attn/mask_%dx%d_%d.png'%(h,w,i)
-                            if not os.path.exists(mask_name): 
-                                Image.fromarray(mask_save).save(mask_name)
-                            attn_masks = []
-                            for j in range(start_idx,idx):
-                                image = curr[8:,j,:,:].mean(0).clone().detach()
-                                # print(image.shape)
-                                image = 255 * image / image.max()
-                                image = image.unsqueeze(-1).expand(*image.shape, 3)
-                                # print(image.shape)
-                                image = image.cpu().numpy().astype(np.uint8)
-                                image = np.array(Image.fromarray(image).resize((256, 256)))
-                                # print(image.shape)
-                                image = ptp_utils.text_under_image(image, tokens[j-1])
-                                # print(image.shape)
-                                attn_masks.append(image)
-                            attn_masks_save = np.concatenate(attn_masks, axis=1)
-                            # print(attn_masks_save.shape)
-                            # attn_masks_name = 'image_log/test_attn/before_attn_mask_%s_%dx%d_inst=%d_t=%d.png'%(name,h,w,i,index)
-                            attn_masks_name = 'image_log/test_attn_no_t/before_attn_mask_%s_%dx%d_inst=%d.png'%(name,h,w,i)
-                            if not os.path.exists(attn_masks_name): 
-                                Image.fromarray(attn_masks_save).save(attn_masks_name)
-                        # ###############################
-                        loss = loss + loss_.sum((2,3)).mean() * (x_h/h) **2
-                    # print(curr.shape)
-                    # loss_ = ((curr-ref)**2).sum((1,2)).mean(0)
-                    # loss = loss + loss_
-            # graph = make_dot(loss)
-            # graph.render(filename='cnn',view=False,format='png')
-            opt.zero_grad()
-            loss.backward(retain_graph=False) # 
-            # print('x_in.grad', x_in.grad)
-            opt.step()
-            # print('x_in',x_in)
-            # sys.exit()
-            
-            with torch.no_grad():
-                # model_uncond, model_t = self.model.apply_model(x_in.detach(), t_in, c_in).chunk(2)
-                model_uncond, model_t = unet(x=x_in, timesteps=t, context=cond_txt, control=control, only_mid_control=self.model.only_mid_control).chunk(2)
-                if visual_attn:
-                    for name, module in unet.named_modules():
-                        module_name = type(module).__name__
-                        if module_name == "CrossAttention" and 'attn2' in name:
-                            curr = module.attn_probs # bs(c+uc)* head, h*w, t_len
-                            bs, hxw, t_len = curr.shape
-                            h = w = int(hxw**0.5)
-                            if h<=8: # 小于8x8的不加
-                                continue
-                            curr = curr.permute(0,2,1).reshape(bs, t_len, h, w) # bs(c+uc)* head, t_len, h, w
-                            # print(ref.shape)
-                            for i, idx in enumerate(split_id): # i代表第i个instance
-                                if i == 0:
-                                    start_idx = 1
-                                else:
-                                    start_idx = split_id[i-1]+1
-                                # ######## 用于保存sam_mask和attn_mask
-                                attn_masks = []
-                                for j in range(start_idx,idx):
-                                    image = curr[:,j,:,:].mean(0).clone().detach()
-                                    # print(image.shape)
-                                    image = 255 * image / image.max()
-                                    image = image.unsqueeze(-1).expand(*image.shape, 3)
-                                    # print(image.shape)
-                                    image = image.cpu().numpy().astype(np.uint8)
-                                    image = np.array(Image.fromarray(image).resize((256, 256)))
-                                    # print(image.shape)
-                                    image = ptp_utils.text_under_image(image, tokens[j-1])
-                                    # print(image.shape)
-                                    attn_masks.append(image)
-                                attn_masks_save = np.concatenate(attn_masks, axis=1)
-                                # print(attn_masks_save.shape)
-                                # attn_masks_name = 'image_log/test_attn/after_attn_mask_%s_%dx%d_%d_t=%d.png'%(name,h,w,i,index)
-                                attn_masks_name = 'image_log/test_attn_no_t/after_attn_mask_%s_%dx%d_inst=%d.png'%(name,h,w,i)
-                                if not os.path.exists(attn_masks_name): 
-                                    Image.fromarray(attn_masks_save).save(attn_masks_name)
-                            # ########
-            model_output = model_uncond + unconditional_guidance_scale * (model_t - model_uncond)
-            x = x_in.detach().chunk(2)[0]
-
-        if self.model.parameterization == "v":
-            e_t = self.model.predict_eps_from_z_and_v(x, t, model_output)
-        else:
-            e_t = model_output
-
-        if score_corrector is not None:
-            assert self.model.parameterization == "eps", 'not implemented'
-            e_t = score_corrector.modify_score(self.model, e_t, x, t, c, **corrector_kwargs)
-
-        alphas = self.model.alphas_cumprod if use_original_steps else self.ddim_alphas
-        alphas_prev = self.model.alphas_cumprod_prev if use_original_steps else self.ddim_alphas_prev
-        sqrt_one_minus_alphas = self.model.sqrt_one_minus_alphas_cumprod if use_original_steps else self.ddim_sqrt_one_minus_alphas
-        sigmas = self.model.ddim_sigmas_for_original_num_steps if use_original_steps else self.ddim_sigmas
-        # select parameters corresponding to the currently considered timestep
-        a_t = torch.full((b, 1, 1, 1), alphas[index], device=device)
-        a_prev = torch.full((b, 1, 1, 1), alphas_prev[index], device=device)
-        sigma_t = torch.full((b, 1, 1, 1), sigmas[index], device=device)
-        sqrt_one_minus_at = torch.full((b, 1, 1, 1), sqrt_one_minus_alphas[index],device=device)
-
-        # current prediction for x_0
-        if self.model.parameterization != "v":
-            # pred_x0 = (x - sqrt_one_minus_at * e_t) / a_t.sqrt()
-            pred_x0 = (x - sqrt_one_minus_at * e_t) / a_t.sqrt()
-        else:
-            pred_x0 = self.model.predict_start_from_z_and_v(x, t, model_output)
-
-        if quantize_denoised:
-            pred_x0, _, *_ = self.model.first_stage_model.quantize(pred_x0)
-
-        if dynamic_threshold is not None:
-            raise NotImplementedError()
-
-        # direction pointing to x_t
-        dir_xt = (1. - a_prev - sigma_t**2).sqrt() * e_t
-        noise = sigma_t * noise_like(x.shape, device, repeat_noise) * temperature
-        if noise_dropout > 0.:
-            noise = torch.nn.functional.dropout(noise, p=noise_dropout)
-        x_prev = a_prev.sqrt() * pred_x0 + dir_xt + noise
-        return x_prev, pred_x0
-
     def p_sample_ddim_with_attn_gdc(self, x, c, t, sam_mask, split_id, index, repeat_noise=False, use_original_steps=False, quantize_denoised=False,
                       temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None,
                       unconditional_guidance_scale=1., unconditional_conditioning=None,
@@ -990,7 +681,7 @@ class DDIMSampler_withsam(object):
             print("unconditional_guidance_scale cannot be 1.0")
             sys.exit()
         else:
-            # 设置成可以计算梯度
+
             unet = self.model.model.diffusion_model
             unet = prep_unet(unet)
 
@@ -1008,7 +699,7 @@ class DDIMSampler_withsam(object):
                         c_in[k] = [torch.cat([
                             unconditional_conditioning[k][i],
                             c[k][i]]) for i in range(len(c[k]))]
-                    elif isinstance(c[k], dict): # 适配struct的输入改这里 c{"c_cat": ,"c_crossattention"}
+                    elif isinstance(c[k], dict): 
                         c_in[k] = [unconditional_conditioning[k][0], c[k]] 
                     else:
                         c_in[k] = torch.cat([
@@ -1029,129 +720,46 @@ class DDIMSampler_withsam(object):
             
             cond_hint = torch.cat(c_in['c_concat'], 1)
             cond_txt = c_in['c_crossattn'][0]
-            with torch.no_grad(): # 以灰度图为控制条件
+            with torch.no_grad(): 
                 gray_z_last = self.model.first_stage_model.g_encoder(cond_hint)[-1]
                 cond_hint = gray_z_last
             control = self.model.control_model(cond_hint)
-            # print(x_in.shape)
-            # print(t.shape)
-            # print(cond_txt.shape)
-            # print(control.shape)
-            # sys.exit()
+    
             noise_pred = unet(x=x_in, timesteps=t, context=cond_txt, control=control, only_mid_control=self.model.only_mid_control)
             
-            # 计算loss并回传给x_in
-            # opt = torch.optim.SGD([x_in], lr=0.1)
-            # loss = torch.tensor(0)
-            # print('split_id',split_id)
             for name, module in unet.named_modules():
                 module_name = type(module).__name__
                 if module_name == "CrossAttention" and 'attn2' in name:
-                    curr = module.attn_probs # bs(c+uc)* head, h*w, t_len
-                    # print('curr_sim',curr_sim.shape)
+                    curr = module.sim # 
                     bs, hxw, t_len = curr.shape
                     h = w = int(hxw**0.5)
-                    print('before', name, module.sim[8,:,1])
-                    # if h > 16: # 小于8x8的不加
-                    #     continue
-                    curr = curr.permute(0,2,1).reshape(bs, t_len, h, w) # bs(c+uc)* head, t_len, h, w
-                    # ref =  torch.zeros_like(module.attn_probs).detach().to(device)
-                    ref = 1 - torch.nn.functional.interpolate(sam_mask, (h,w))
+                    # print('before', name, module.sim[8,:,1])
+ 
+                    curr = curr.permute(0,2,1).reshape(bs, t_len, h, w) # bs=1 (c+uc)* head, t_len, h, w
+                    ref =  torch.nn.functional.interpolate(sam_mask, (h,w))
                     ref = ref.detach().to(device)
                     # print('ref.shape',ref.shape) # bs , num_inst, h, w 
                     loss = 0.
-                    for i, idx in enumerate(split_id): # i代表第i个instance
+                    for i, idx in enumerate(split_id): # 
                         if i == 0:
                             start_idx = 1
                         else:
                             start_idx = split_id[i-1]+1
-                        # print(curr[8:, start_idx:idx, :, :].shape)
-                        # print('start_end_idx_%d:'%i,start_idx,idx)
-                        # print(tokens[start_idx-1:idx-1])
-                        loss_ =  curr[8:, start_idx:idx, :, :] * ref[:,i].unsqueeze(1) # bs维取8是排除unconditon_c，但都改貌似效果好一点
-                        loss = loss + loss_.sum((2,3)).mean() * (x_h/h) **2
+       
+                        sig_p = torch.sigmoid(curr[8:, start_idx:idx, :, :])
+                        tgt = ref[:,i].unsqueeze(1).repeat(sig_p.shape[0],sig_p.shape[1],1,1).float()
+                        loss_fn = torch.nn.BCELoss()
+                        loss_ = loss_fn(sig_p,tgt)
+                        loss = loss + loss_
 
-                        # ######## 用于保存sam_mask和attn_mask ##############
-                        if visual_attn:
-                            mask_save = (ref[:,i].squeeze().cpu().numpy() * 255).astype(np.uint8)
-                            mask_name = 'image_log/test_attn/mask_%dx%d_%d.png'%(h,w,i)
-                            if not os.path.exists(mask_name): 
-                                Image.fromarray(mask_save).save(mask_name)
-                            attn_masks = []
-                            for j in range(start_idx,idx):
-                                image = curr[8:,j,:,:].mean(0).clone().detach()
-                                # print(image.shape)
-                                image = 255 * image / image.max()
-                                image = image.unsqueeze(-1).expand(*image.shape, 3)
-                                # print(image.shape)
-                                image = image.cpu().numpy().astype(np.uint8)
-                                image = np.array(Image.fromarray(image).resize((256, 256)))
-                                # print(image.shape)
-                                image = ptp_utils.text_under_image(image, tokens[j-1])
-                                # print(image.shape)
-                                attn_masks.append(image)
-                            attn_masks_save = np.concatenate(attn_masks, axis=1)
-                            # print(attn_masks_save.shape)
-                            # attn_masks_name = 'image_log/test_attn/before_attn_mask_%s_%dx%d_inst=%d_t=%d.png'%(name,h,w,i,index)
-                            attn_masks_name = 'image_log/test_attn_no_t/before_attn_mask_%s_%dx%d_inst=%d.png'%(name,h,w,i)
-                            if not os.path.exists(attn_masks_name): 
-                                Image.fromarray(attn_masks_save).save(attn_masks_name)
-                        # ###############################
                     sim_grad = torch.autograd.grad(loss, module.sim)[0]
                     # print('sim_grad', sim_grad)
-                    module.sim = module.sim - sim_grad 
+                    module.sim = module.sim - sim_grad * 1.
     
-            # graph = make_dot(loss)
-            # graph.render(filename='cnn',view=False,format='png')
-            # opt.zero_grad()
-            # loss.backward(retain_graph=False) # 
-            # print('x_in.grad', x_in.grad)
-            # opt.step()
-            # print('x_in',x_in)
-            # sys.exit()
-            
             with torch.no_grad():
                 # model_uncond, model_t = self.model.apply_model(x_in.detach(), t_in, c_in).chunk(2)
                 model_uncond, model_t = unet(x=x_in, timesteps=t, context=cond_txt, control=control, only_mid_control=self.model.only_mid_control).chunk(2)
-                # 查看后面的sim
-                for name, module in unet.named_modules():
-                    module_name = type(module).__name__
-                    if module_name == "CrossAttention" and 'attn2' in name:
-                        curr = module.attn_probs # bs(c+uc)* head, h*w, t_len
-                        bs, hxw, t_len = curr.shape
-                        h = w = int(hxw**0.5)
-                        print('after', name, module.sim_save[8,:,1])
-                        # if h<=8: # 小于8x8的不加
-                        #     continue
-                        curr = curr.permute(0,2,1).reshape(bs, t_len, h, w) # bs(c+uc)* head, t_len, h, w
-                        # print(ref.shape)
-                        for i, idx in enumerate(split_id): # i代表第i个instance
-                            if i == 0:
-                                start_idx = 1
-                            else:
-                                start_idx = split_id[i-1]+1
-                            # ######## 用于保存sam_mask和attn_mask
-                            if visual_attn:
-                                attn_masks = []
-                                for j in range(start_idx,idx):
-                                    image = curr[:,j,:,:].mean(0).clone().detach()
-                                    # print(image.shape)
-                                    image = 255 * image / image.max()
-                                    image = image.unsqueeze(-1).expand(*image.shape, 3)
-                                    # print(image.shape)
-                                    image = image.cpu().numpy().astype(np.uint8)
-                                    image = np.array(Image.fromarray(image).resize((256, 256)))
-                                    # print(image.shape)
-                                    image = ptp_utils.text_under_image(image, tokens[j-1])
-                                    # print(image.shape)
-                                    attn_masks.append(image)
-                                attn_masks_save = np.concatenate(attn_masks, axis=1)
-                                # print(attn_masks_save.shape)
-                                # attn_masks_name = 'image_log/test_attn/after_attn_mask_%s_%dx%d_%d_t=%d.png'%(name,h,w,i,index)
-                                attn_masks_name = 'image_log/test_attn_no_t/after_attn_mask_%s_%dx%d_inst=%d.png'%(name,h,w,i)
-                                if not os.path.exists(attn_masks_name): 
-                                    Image.fromarray(attn_masks_save).save(attn_masks_name)
-                            # ########
+
             model_output = model_uncond + unconditional_guidance_scale * (model_t - model_uncond)
             x = x_in.detach().chunk(2)[0]
 

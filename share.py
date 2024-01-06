@@ -1,4 +1,4 @@
-import pub_dir.config as config
+import config as config
 from cldm.hack import disable_verbosity, enable_sliced_attention
 
 
