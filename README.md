@@ -38,35 +38,24 @@ Run demo with instance-aware sampling:
 python inference.py
 ```
 
-# Train
+## Train
 
-Download dataset according to the next section (L-Series) .
-
-Download init_model [(baidu)](https://pan.baidu.com/s/1JBsfiCKKURHWi_k5LH9szg?pwd=151n ) [(google)](https://drive.google.com/drive/folders/1lkQIPYJN3T8TDC4kyt4mQ2_awBv6hMMO?usp=sharing) and put it into "./models".
-
-run the command:
-
-```
-python colorization_main.py -t
-```
-
-# Language-based Colorization (L-Series)
-
-Welcome to our L-Series, aiming to continue exploring better controllable colorization method with language description guidance.
-
-### Dataset
+##### Download dataset:
 
 [Extended COCO-Stuff](https://github.com/changzheng123/L-CoDe)  provides additional correspondence annotations between color words and object words. 
 
 [Multi-instance](https://drive.google.com/file/d/1FnVdKtAVdgIm8AXT3jZTivNySILUErU9/view) contains samples with distinctive visual characteristics and detailed language descriptions for multiple instances in images.
 
-### Paper
+##### Download init_model:
 
-L-CoDe: Language-based colorization using color-object decoupled conditions [(AAAI22)](https://ci.idm.pku.edu.cn/Weng_AAAI22.pdf)
+Download init_model from [(baidu)](https://pan.baidu.com/s/1JBsfiCKKURHWi_k5LH9szg?pwd=151n ) [(google)](https://drive.google.com/drive/folders/1lkQIPYJN3T8TDC4kyt4mQ2_awBv6hMMO?usp=sharing) and put it into "./models".
 
-L-CoDer: Language-based colorization with color-object decoupling transformer [(ECCV22)](https://ci.idm.pku.edu.cn/Weng_ECCV22g.pdf)
+##### Run the command:
 
-L-CoIns: Language-based colorization with instance awareness [(CVPR23)](https://ci.idm.pku.edu.cn/Weng_CVPR23f.pdf)
+```
+python colorization_main.py -t
+```
+
 
 ## License
 
@@ -84,3 +73,9 @@ If you use this code for your research, please cite our papers [L-CAD: Language-
   year = {2023}
 }
 ```
+## Other language-based colorization
+L-CoDe: Language-based colorization using color-object decoupled conditions [(AAAI22)](https://ci.idm.pku.edu.cn/Weng_AAAI22.pdf)
+
+L-CoDer: Language-based colorization with color-object decoupling transformer [(ECCV22)](https://ci.idm.pku.edu.cn/Weng_ECCV22g.pdf)
+
+L-CoIns: Language-based colorization with instance awareness [(CVPR23)](https://ci.idm.pku.edu.cn/Weng_CVPR23f.pdf)
