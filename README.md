@@ -1,6 +1,7 @@
 # L-CAD: Language-based Colorization with Any-level Descriptions using Diffusion Priors
 
-**Abstract**: **Language-based colorization** produces plausible and visually pleasing colors under the guidance of user-friendly natural language descriptions. In this paper, we propose L-CAD to perform language-based colorization with any level descriptions. 
+## Abstract
+**Language-based colorization** produces plausible and visually pleasing colors under the guidance of user-friendly natural language descriptions. In this paper, we propose L-CAD to perform language-based colorization with any level descriptions. 
 
 <img src="teaser.png" align=center />
 
