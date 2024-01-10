@@ -65,7 +65,7 @@ if __name__ == "__main__":
 
     if args.train:  
         n_gpu = 2
-        init_model_path = 'models/control_sd15_ini_ehdec_catUnet.ckpt'
+        init_model_path = 'models/init_model.ckpt'
 
         batch_size = 16
         logger_freq = 1000
