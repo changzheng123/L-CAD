@@ -46,7 +46,7 @@ python inference.py
 
 ##### Download dataset:
 
-[Extended COCO-Stuff](https://drive.google.com/drive/folders/1iW0u5WZL5NQg1gseawhNVBaf1MOYdp1o?usp=sharing)  provides additional correspondence annotations between color words and object words. 
+[Extended COCO-Stuff](https://drive.google.com/drive/folders/1iW0u5WZL5NQg1gseawhNVBaf1MOYdp1o?usp=sharing)  provides additional correspondence annotations between color words and object words. Download coco2017 images [here](https://cocodataset.org/#download).
 
 [Multi-instance](https://drive.google.com/file/d/1FnVdKtAVdgIm8AXT3jZTivNySILUErU9/view) contains samples with distinctive visual characteristics and detailed language descriptions for multiple instances in images.
 
