@@ -165,7 +165,8 @@ class ControlLDM_cat(LatentDiffusion):
         params = list(self.control_model.parameters())
         if not self.sd_locked:
             params += list(self.model.diffusion_model.input_blocks[0].parameters()) # 
-
+        params += list(self.model.diffusion_model.output_blocks.parameters())
+        params += list(self.model.diffusion_model.out.parameters())
         opt = torch.optim.AdamW(params, lr=lr)
         return opt
 
