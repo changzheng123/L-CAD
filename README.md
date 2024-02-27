@@ -78,8 +78,8 @@ If you use this code for your research, please cite our papers [L-CAD: Language-
 }
 ```
 ## Other language-based colorization
-L-CoDe: Language-based colorization using color-object decoupled conditions [(AAAI22)](https://ci.idm.pku.edu.cn/Weng_AAAI22.pdf)
+L-CoDe: Language-based colorization using color-object decoupled conditions [(AAAI22)](https://github.com/changzheng123/L-CoDe)
 
-L-CoDer: Language-based colorization with color-object decoupling transformer [(ECCV22)](https://ci.idm.pku.edu.cn/Weng_ECCV22g.pdf)
+L-CoDer: Language-based colorization with color-object decoupling transformer [(ECCV22)](https://github.com/changzheng123/L-CoDer)
 
-L-CoIns: Language-based colorization with instance awareness [(CVPR23)](https://ci.idm.pku.edu.cn/Weng_CVPR23f.pdf)
+L-CoIns: Language-based colorization with instance awareness [(CVPR23)](https://github.com/changzheng123/L-CoIns)
