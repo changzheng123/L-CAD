@@ -30,7 +30,7 @@ pip install -r requirement.txt
 
 ## Test with pre-trained model
 
-Download pre-trained models here [(baidu)](https://pan.baidu.com/s/18mAbnjjGaj5nXuG4JiutQg?pwd=778j ) [(google)](https://drive.google.com/drive/folders/1lkQIPYJN3T8TDC4kyt4mQ2_awBv6hMMO?usp=sharing) and put them into "./models", and run:
+Download pre-trained models here [(baidu)](https://pan.baidu.com/s/18mAbnjjGaj5nXuG4JiutQg?pwd=778j ) [(google)](https://drive.google.com/drive/folders/1_MsfiitFc1RONXnCwbKr8wPtEvLsTgPq?usp=drive_link) and put them into "./models", and run:
 
 ```
 python colorization_main.py 
